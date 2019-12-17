@@ -39,7 +39,7 @@ NUMBER_OF_RUNS = 1
 EXPORT_EXCEL = None
 TERMINAL_LOGGING = True
 RECOMMENDS_REPORT = True
-DAYS_OF_WEEK = "1..7"
+DAYS_OF_WEEK = "1,2,3,4,5,6,7"
 
 def get_input_arguments():
     parser = argparse.ArgumentParser(description='Autotune')
@@ -66,7 +66,7 @@ def get_input_arguments():
     parser.add_argument('--end-date',
                         '-e',
                         type=lambda d: datetime.datetime.strptime(d, '%Y-%m-%d'),
-                        help='(--end-date=<YYYY-MM-DD>) ')
+                        help='(--end-date=<YYYY-MM-DD>)')
     parser.add_argument('--runs',
                         '-r',
                         type=int,
@@ -86,7 +86,7 @@ def get_input_arguments():
                         '-w',
                         type=str,
                         metavar='DAYS_OF_WEEK',
-                        help='(--days-of-week=<list or range> Monday = 1, Tuesday = 2 .. Sunday = 7)')
+                        help='(--days-of-week=<comma separated quoted list - Monday = 1, Tuesday = 2 .. Saturday = 6, Sunday = 7("1,2,3,4,5,6,7")>)')
     
     return parser.parse_args()
 
@@ -119,11 +119,25 @@ def assign_args_to_variables(args):
     if args.days_of_week is not None:
         DAYS_OF_WEEK = args.days_of_week
 
-def get_nightscout_profile(nightscout_host):
-    #TODO: Add ability to use API secret for Nightscout.
-    res = requests.get(nightscout_host + '/api/v1/profile.json')
-    with open(os.path.join(autotune_directory, 'nightscout.profile.json'), 'w') as f:  # noqa: F821
-        f.write(res.text)
+#def get_nightscout_profile(nightscout_host, directory):
+#    autotune_directory = os.path.join(directory, 'autotune')
+#    #TODO: Add ability to use API secret for Nightscout.
+#    res = requests.get(nightscout_host + '/api/v1/profile.json')
+#    with open(os.path.join(autotune_directory, 'nightscout.profile.json'), 'w') as f:  # noqa: F821
+#        f.write(res.text)
+
+def create_date_lists(start_date, end_date, days_of_week, directory):
+    date_range_list = [start_date + datetime.timedelta(days=x) for x in range(0, (end_date - start_date).days)]
+    date_list = []
+    dow_list = days_of_week.split(',')
+    date_list_file = os.path.join(directory, 'test', 'date-list.txt')
+    with open(date_list_file, 'w') as d:
+        for dateobj in date_range_list:
+            for dow in dow_list:
+                if dateobj.isoweekday() == int(dow):
+                    date_list.append(dateobj.date())
+        for matching_date in date_list:
+            d.write(matching_date.strftime("%Y-%m-%d") + "\n")
 
 def get_openaps_profile(directory):
     shutil.copy(os.path.join(directory, 'settings', 'pumpprofile.json'), os.path.join(directory, 'autotune', 'profile.pump.json'))
@@ -144,33 +158,10 @@ def get_openaps_profile(directory):
     # cp settings/autotune.json autotune/profile.json
     shutil.copy(os.path.join(directory, 'settings', 'profile.json'), os.path.join(directory, 'settings', 'autotune.json'))
     
+def get_openaps_daily_profile(directory, dow):
     # cp settings/autotune.json autotune/profile.json
-    shutil.copy(os.path.join(directory, 'settings', 'autotune.json'), os.path.join(directory, 'autotune', 'profile.json'))
-    
-    #TODO: Do the correct copying here.
-    # cat autotune/profile.json | json | grep -q start || cp autotune/profile.pump.json autotune/profile.json'])
-
-def build_date_array(days_of_week, date):
-    for dow in days_of_week:
-        if date.isoweekday() == dow:
-            return(date)
-
-def build_array_of_date_arrays(days_of_week, start_date, end_date, directory):
-    output_file_name = os.path.join(directory, 'autotune', 'dates-list.txt')
-    array_of_date_arrays = []
-    date_array = []
-    date_list = [start_date + datetime.timedelta(days=x) for x in range(0, (end_date - start_date).days)]
-    for date in date_list:
-        this_date = build_date_array(days_of_week, date)
-        if this_date is not None:
-            date_array.append[this_date]
-        else:
-            array_of_date_arrays.append[date_array]
-            date_array = []
-    with open(output_file_name, 'w') as f:
-        for array in array_of_date_arrays:
-            for date in array:
-                f.write(date.text.encode('utf-8'))
+    profile_day = 'profile-day' + str(dow) + '.json'
+    shutil.copy(os.path.join(directory, 'autotune', profile_day), os.path.join(directory, 'autotune', 'profile.json'))
 
 def get_nightscout_carb_and_insulin_treatments(nightscout_host, start_date, end_date, days_of_week, directory):
     date_list_file_name = os.path.join(directory, 'autotune', 'date-list.txt')
@@ -190,6 +181,7 @@ def get_nightscout_carb_and_insulin_treatments(nightscout_host, start_date, end_
 def get_nightscout_bg_entries(nightscout_host, start_date, end_date, days_of_week, directory):
     logging.info('Grabbing NIGHTSCOUT enries/sgv.json for days: {2} within date range: {0} to {1}'.format(start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"), days_of_week))
     #date_list = [start_date + datetime.timedelta(days=x) for x in range(0, (end_date - start_date).days)]
+    date_list_file_name = os.path.join(directory, 'autotune', 'date-list.txt')
     with open(date_list_file_name, 'r') as rf:
         for date in rf.readlines():
             start_date = date.strftime("%Y-%m-%d") + 'T20:00-05:00'
@@ -219,7 +211,8 @@ def run_autotune(start_date, end_date, number_of_runs, directory):
             ns_treatments = os.path.join(autotune_directory, 'ns-treatments.json')
             profile = os.path.join(autotune_directory, 'profile.json')
             ns_entries = os.path.join(autotune_directory, 'ns-entries.{date}.json'.format(date=date.strftime("%Y-%m-%d")))
-            autotune_prep = 'oref0-autotune-prep {ns_treatments} {profile} {ns_entries}'.format(ns_treatments=ns_treatments, profile=profile, ns_entries=ns_entries)
+            pump_profile = os.path.join(autotune_directory, 'profile.pump.json')
+            autotune_prep = 'oref0-autotune-prep {ns_treatments} {profile} {ns_entries} {pump_profile}'.format(ns_treatments=ns_treatments, profile=profile, ns_entries=ns_entries, pump_profile=pump_profile)
             
             # autotune.$RUN_NUMBER.$DATE.json  
             autotune_run_filename = os.path.join(autotune_directory, 'autotune.{run_number}.{date}.json'
@@ -279,12 +272,16 @@ if __name__ == "__main__":
     assign_args_to_variables(args)
     
     # TODO: Convert Nightscout profile to OpenAPS profile format.
-    #get_nightscout_profile(NIGHTSCOUT_HOST)
-    
-    get_openaps_profile(DIR)
-    build_array_of_date_arrays(DAYS_OF_WEEK, START_DATE, END_DATE, DIR)
-    get_nightscout_carb_and_insulin_treatments(NIGHTSCOUT_HOST, START_DATE, END_DATE, DAYS_OF_WEEK, DIR)
-    get_nightscout_bg_entries(NIGHTSCOUT_HOST, START_DATE, END_DATE, DAYS_OF_WEEK, DIR)
+    #get_nightscout_profile(NIGHTSCOUT_HOST, DIR)
+    create_date_lists(START_DATE, END_DATE, DAYS_OF_WEEK, DIR)
+    days_of_week = DAYS_OF_WEEK
+    dow_list = days_of_week.split(',')
+    for dow in dow_list:
+        get_openaps_daily_profile(DIR, dow)
+        get_openaps_profile(DIR)
+        get_nightscout_carb_and_insulin_treatments(NIGHTSCOUT_HOST, START_DATE, END_DATE, DAYS_OF_WEEK, DIR)
+        get_nightscout_bg_entries(NIGHTSCOUT_HOST, START_DATE, END_DATE, DAYS_OF_WEEK, DIR)
+
     run_autotune(START_DATE, END_DATE, NUMBER_OF_RUNS, DIR)
     
     if EXPORT_EXCEL:
