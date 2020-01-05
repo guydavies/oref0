@@ -194,18 +194,17 @@ def get_nightscout_carb_and_insulin_treatments(nightscout_host, directory, dow, 
     # TODO: What does 'T20:00-05:00' mean?
     output_file_name = "ns-treatments." + datetime.datetime.strftime(run_date, "%Y-%m-%d") + ".json"
     output_file_path = os.path.join(directory, 'autotune', output_file_name)
-    #today = run_date.rstrip('\n')
-    #run_date = datetime.datetime.strptime(run_date, "%Y-%m-%d")
     tomorrow_date = run_date + datetime.timedelta(days=1)
     tomorrow = datetime.datetime.strftime(tomorrow_date, "%Y-%m-%d")
     yesterday_date = run_date - datetime.timedelta(days=1)
     yesterday = datetime.datetime.strftime(yesterday_date, "%Y-%m-%d")
     logging.info('Grabbing NIGHTSCOUT treatments.json for date: {0}'.format(run_date))
-    url='{0}/api/v1/treatments.json?find\[created_at\]\[\$gt\]=`date --date="{1} -4 hours" -Iminutes`&find\[created_at\]\[\$lt\]=`date --date="{2} +1 days" -Iminutes`'
+    url='{0}/api/v1/treatments.json?find[created_at][$gt]={1}&find[created_at][$lt]={2}'
     url = url.format(nightscout_host, yesterday_date, tomorrow_date)
     if user_token != "":
         user_token = "&token=" + user_token    #TODO: Add ability to use API secret for Nightscout.
         url=url + user_token
+    print("Treatments URL: " + url)
     res = requests.get(url)
     response = str(res.content, 'utf-8')
     with open(output_file_path, 'w') as f:
@@ -220,18 +219,18 @@ def get_nightscout_bg_entries(nightscout_host, directory, dow, run_date, user_to
     yesterday_date = run_date - datetime.timedelta(days=1)
     yesterday = datetime.datetime.strftime(yesterday_date, "%Y-%m-%d")
     logging.info('Grabbing NIGHTSCOUT enries/sgv.json for date: {0}'.format(run_date))
-    url="{0}/api/v1/entries/sgv.json?find[dateString][$gt]={1}&find[dateString][$lt]={2}&count=1500{3}"
-    url = url.format(nightscout_host, yesterday, tomorrow, user_token)
+    url="{0}/api/v1/entries/sgv.json?find[dateString][$gt]={1}&find[dateString][$lt]={2}&count=1500"
+    url = url.format(nightscout_host, yesterday, tomorrow)
     if user_token != "":
-        user_token = "&token=" + user_token    #TODO: Add ability to use API secret for Nightscout.
+        user_token = "&token=" + user_token
         url = url + user_token
+    print("SGV URL: " + url)
     res = requests.get(url)
     response = str(res.content, 'utf-8')
     with open(os.path.join(directory, "autotune", "ns-entries.{0}.json".format(run_date)), 'w') as f:
         f.write(response)
 
 def run_autotune(dow, number_of_runs, directory):
-#    date_list = [start_date + datetime.timedelta(days=x) for x in range(0, (end_date - start_date).days)]
     autotune_directory = os.path.join(directory, 'autotune')
     shutil.copy(os.path.join(autotune_directory, 'profile.pump.{dow}.json').format(dow=dow),
                 os.path.join(autotune_directory, 'profile.pump.json'))
@@ -327,6 +326,7 @@ if __name__ == "__main__":
             get_nightscout_carb_and_insulin_treatments(NIGHTSCOUT_HOST, DIR, dow, run_date, USER_TOKEN)
             get_nightscout_bg_entries(NIGHTSCOUT_HOST, DIR, dow, run_date, USER_TOKEN)
 #                get_openaps_profile(DIR)
+        for run_date in date_list:
             run_autotune(dow, NUMBER_OF_RUNS, DIR)
     
     if EXPORT_EXCEL:
