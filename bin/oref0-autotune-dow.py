@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 from __future__ import print_function
 # Python version of oref0-autotune.sh
 # Original bash code: scottleibrand, pietergit, beached, danamlewis
@@ -20,7 +22,7 @@ from __future__ import print_function
 #     logs terminal output to autotune.<date stamp>.log in the autotune directory, default to true
 #   DAYS_OF_WEEK, (--days-of-week=<dow>)
 #     days of week for which to run the autotune (Monday = 1, Tuesday = 2 .. Sunday = 7)
-#     list (e.g. 1,2,3,4,5) or range (1..5)
+#     list (e.g. "1,2,3,4,5")
 
 import argparse
 import requests
@@ -39,8 +41,8 @@ NUMBER_OF_RUNS = 1
 EXPORT_EXCEL = None
 TERMINAL_LOGGING = True
 RECOMMENDS_REPORT = True
-DAYS_OF_WEEK = "1,2,3,4,5,6,7"
-USER_TOKEN = ""
+DAYS_OF_WEEK = '1,2,3,4,5,6,7'
+USER_TOKEN = ''
 
 def get_input_arguments():
     parser = argparse.ArgumentParser(description='Autotune')
@@ -98,27 +100,27 @@ def get_input_arguments():
 
 def assign_args_to_variables(args):
     # TODO: Input checking.
-    
-    global DIR, NIGHTSCOUT_HOST, START_DATE, END_DATE, USER_TOKEN, NUMBER_OF_RUNS, \
-           EXPORT_EXCEL, TERMINAL_LOGGING, RECOMMENDS_REPORT, DAYS_OF_WEEK
-    
+
+    global DIR, NIGHTSCOUT_HOST, START_DATE, END_DATE, USER_TOKEN, NUMBER_OF_RUNS,\
+        EXPORT_EXCEL, TERMINAL_LOGGING, RECOMMENDS_REPORT, DAYS_OF_WEEK
+
     # On Unix and Windows, return the argument with an initial component of
     # ~ or ~user replaced by that user's home directory.
     DIR = os.path.expanduser(args.dir)
-    
+
     NIGHTSCOUT_HOST = args.ns_host
 
     START_DATE = args.start_date
-    
+
     if args.end_date is not None:
         END_DATE = args.end_date
-        
+    
     if args.user_token is not None:
         USER_TOKEN = args.user_token
-
+    
     if args.runs is not None:
         NUMBER_OF_RUNS = args.runs
-        
+    
     if args.xlsx is not None:
         EXPORT_EXCEL = args.xlsx
     
@@ -155,6 +157,7 @@ def create_date_lists(start_date, end_date, days_of_week, directory):
                     dd.write(str(date) + '\n')
                     d.write(str(day) + ": " + str(date) + "\n")
     return date_dictionary
+    print(date_dictionary)
 
 def get_openaps_profile(directory):
     shutil.copy(os.path.join(directory, 'settings', 'pumpprofile.json'), os.path.join(directory, 'autotune', 'profile.pump.json'))
@@ -174,7 +177,7 @@ def get_openaps_profile(directory):
 
     # cp settings/autotune.json autotune/profile.json
     shutil.copy(os.path.join(directory, 'settings', 'profile.json'), os.path.join(directory, 'settings', 'autotune.json'))
-    
+
 def get_openaps_daily_profile(directory, dow):
     # cp settings/autotune.json autotune/profile.json
     profile_day = 'profile-day' + dow + '.json'
@@ -185,51 +188,53 @@ def get_openaps_daily_profile(directory, dow):
     else:
         shutil.copy(os.path.join(directory, 'settings', 'profile.json'), os.path.join(directory, 'autotune', 'profile.json'))
 
-def get_nightscout_carb_and_insulin_treatments(nightscout_host, directory, dow, today_date, user_token):
-    if user_token != "":
-        user_token = "&token=" + user_token
+def get_nightscout_carb_and_insulin_treatments(nightscout_host, directory, dow, run_date, user_token):
     date_list_file_name = "date-list." + dow + ".txt"
     date_list_file_path = os.path.join(directory, 'autotune', date_list_file_name)
     # TODO: What does 'T20:00-05:00' mean?
-    output_file_name = "ns-treatments." + datetime.datetime.strftime(today_date, "%Y-%m-%d") + ".json"
+    output_file_name = "ns-treatments." + datetime.datetime.strftime(run_date, "%Y-%m-%d") + ".json"
     output_file_path = os.path.join(directory, 'autotune', output_file_name)
-    #today = this_date.rstrip('\n')
-    #today_date = datetime.datetime.strptime(this_date, "%Y-%m-%d")
-    tomorrow_date = today_date + datetime.timedelta(days=1)
+    #today = run_date.rstrip('\n')
+    #run_date = datetime.datetime.strptime(run_date, "%Y-%m-%d")
+    tomorrow_date = run_date + datetime.timedelta(days=1)
     tomorrow = datetime.datetime.strftime(tomorrow_date, "%Y-%m-%d")
-    yesterday_date = today_date - datetime.timedelta(days=1)
+    yesterday_date = run_date - datetime.timedelta(days=1)
     yesterday = datetime.datetime.strftime(yesterday_date, "%Y-%m-%d")
-    logging.info('Grabbing NIGHTSCOUT treatments.json for date: {0}'.format(today_date))
-    url='{0}/api/v1/treatments.json?find\[created_at\]\[\$gt\]=`date --date="{1} -4 hours" -Iminutes`&find\[created_at\]\[\$lt\]=`date --date="{2} +1 days" -Iminutes`'.format(nightscout_host, yesterday_date, tomorrow_date)
-    #TODO: Add ability to use API secret for Nightscout.
+    logging.info('Grabbing NIGHTSCOUT treatments.json for date: {0}'.format(run_date))
+    url='{0}/api/v1/treatments.json?find\[created_at\]\[\$gt\]=`date --date="{1} -4 hours" -Iminutes`&find\[created_at\]\[\$lt\]=`date --date="{2} +1 days" -Iminutes`'
+    url = url.format(nightscout_host, yesterday_date, tomorrow_date)
+    if user_token != "":
+        user_token = "&token=" + user_token    #TODO: Add ability to use API secret for Nightscout.
+        url=url + user_token
     res = requests.get(url)
     response = str(res.content, 'utf-8')
     with open(output_file_path, 'w') as f:
         f.write(response)
 
-def get_nightscout_bg_entries(nightscout_host, directory, dow, today_date, user_token):
+def get_nightscout_bg_entries(nightscout_host, directory, dow, run_date, user_token):
     #date_list = [start_date + datetime.timedelta(days=x) for x in range(0, (end_date - start_date).days)]
-    if user_token != "":
-        user_token = "&token=" + user_token
     date_list_file_name = "date-list." + dow + ".txt"
     date_list_file_path = os.path.join(directory, 'autotune', date_list_file_name)
-    tomorrow_date = today_date + datetime.timedelta(days=1)
+    tomorrow_date = run_date + datetime.timedelta(days=1)
     tomorrow = datetime.datetime.strftime(tomorrow_date, "%Y-%m-%d")
-    yesterday_date = today_date - datetime.timedelta(days=1)
+    yesterday_date = run_date - datetime.timedelta(days=1)
     yesterday = datetime.datetime.strftime(yesterday_date, "%Y-%m-%d")
-    logging.info('Grabbing NIGHTSCOUT enries/sgv.json for date: {0}'.format(today_date))
-
-    url="{0}/api/v1/entries/sgv.json?find[dateString][$gt]={1}$find[dateString][$lt]={2}&count=1500{3}"
+    logging.info('Grabbing NIGHTSCOUT enries/sgv.json for date: {0}'.format(run_date))
+    url="{0}/api/v1/entries/sgv.json?find[dateString][$gt]={1}&find[dateString][$lt]={2}&count=1500{3}"
     url = url.format(nightscout_host, yesterday, tomorrow, user_token)
-    #TODO: Add ability to use API secret for Nightscout.
+    if user_token != "":
+        user_token = "&token=" + user_token    #TODO: Add ability to use API secret for Nightscout.
+        url = url + user_token
     res = requests.get(url)
     response = str(res.content, 'utf-8')
-    with open(os.path.join(directory, "autotune", "ns-entries.{0}.json".format(today_date)), 'w') as f:
+    with open(os.path.join(directory, "autotune", "ns-entries.{0}.json".format(run_date)), 'w') as f:
         f.write(response)
 
 def run_autotune(dow, number_of_runs, directory):
 #    date_list = [start_date + datetime.timedelta(days=x) for x in range(0, (end_date - start_date).days)]
     autotune_directory = os.path.join(directory, 'autotune')
+    shutil.copy(os.path.join(autotune_directory, 'profile.pump.{dow}.json').format(dow=dow),
+                os.path.join(autotune_directory, 'profile.pump.json'))
     for run_number in range(1, number_of_runs + 1):
         daily_date_file = 'date-list.' + dow + '.txt'
         daily_date_path = os.path.join(directory, 'autotune', daily_date_file)
@@ -238,22 +243,22 @@ def run_autotune(dow, number_of_runs, directory):
         for date in date_list:
             # cp profile.json profile.$run_number.$i.json
             date = date.rstrip('\n')
-            shutil.copy(os.path.join(autotune_directory, 'profile.json'),
+            shutil.copy(os.path.join(autotune_directory, 'profile-day{dow}.json').format(dow=dow),
                         os.path.join(autotune_directory, 'profile.{run_number}.{date}.json'
-                        .format(run_number=run_number, date=date.rstrip('\n'))))
-        
+                        .format(run_number=run_number, date=date)))
+
             # Autotune Prep (required args, <pumphistory.json> <profile.json> <glucose.json>), output prepped glucose 
             # data or <autotune/glucose.json> below
             # oref0-autotune-prep ns-treatments.json profile.json ns-entries.$DATE.json > autotune.$RUN_NUMBER.$DATE.json
-            ns_treatments = os.path.join(autotune_directory, 'ns-treatments.{date}.json'.format(date=date.rstrip('\n')))
-            profile = os.path.join(autotune_directory, 'profile-day{dow}.json'.format(dow=dow))
-            ns_entries = os.path.join(autotune_directory, 'ns-entries.{date}.json'.format(date=date.rstrip('\n')))
+            ns_treatments = os.path.join(autotune_directory, 'ns-treatments.{date}.json'.format(date=date))
+            profile = os.path.join(autotune_directory, 'profile.{run_number}.{date}.json'.format(run_number=run_number, date=date))
+            ns_entries = os.path.join(autotune_directory, 'ns-entries.{date}.json'.format(date=date))
             pump_profile = os.path.join(autotune_directory, 'profile.pump.json')
             autotune_prep = 'oref0-autotune-prep {ns_treatments} {profile} {ns_entries} {pump_profile}'.format(ns_treatments=ns_treatments, profile=profile, ns_entries=ns_entries, pump_profile=pump_profile)
-            
+
             # autotune.$RUN_NUMBER.$DATE.json  
             autotune_run_filename = os.path.join(autotune_directory, 'autotune.{run_number}.{date}.json'
-                                                 .format(run_number=run_number, date=date.rstrip('\n')))
+                                                .format(run_number=run_number, date=date))
             with open(autotune_run_filename, "w+") as output:
                 logging.info('Running {script}'.format(script=autotune_prep))
                 call(autotune_prep, stdout=output, shell=True)
@@ -265,11 +270,11 @@ def run_autotune(dow, number_of_runs, directory):
         
             # oref0-autotune-core autotune.$run_number.$i.json profile.json profile.pump.json > newprofile.$RUN_NUMBER.$DATE.json
             profile_pump = os.path.join(autotune_directory, 'profile.pump.json')
-            autotune_core = 'oref0-autotune-core {autotune_run} {profile} {profile_pump}'.format(profile=profile, profile_pump = profile_pump, autotune_run=autotune_run_filename)
+            autotune_core = 'oref0-autotune-core {autotune_run} {profile} {profile_pump}'.format(profile=profile, profile_pump=profile_pump, autotune_run=autotune_run_filename)
             
             # newprofile.$RUN_NUMBER.$DATE.json
             newprofile_run_filename = os.path.join(autotune_directory, 'newprofile.{run_number}.{date}.json'
-                                                   .format(run_number=run_number, date=date.rstrip('\n')))
+                                                    .format(run_number=run_number, date=date))
             with open(newprofile_run_filename, "w+") as output:
                 logging.info('Running {script}'.format(script=autotune_core))
                 call(autotune_core, stdout=output, shell=True)
@@ -277,8 +282,10 @@ def run_autotune(dow, number_of_runs, directory):
         
             # Copy tuned profile produced by autotune to profile.json for use with next day of data
             # cp newprofile.$RUN_NUMBER.$DATE.json profile.json
-            shutil.copy(os.path.join(autotune_directory, 'newprofile.{run_number}.{date}.json'.format(run_number=run_number, date=date.rstrip('\n'))),
-                        os.path.join(autotune_directory, 'newprofile-day{day}.json'.format(day=dow)))
+            shutil.copy(os.path.join(autotune_directory, 'newprofile.{run_number}.{date}.json'.format(run_number=run_number, date=date)),
+                        os.path.join(autotune_directory, 'profile-day{dow}.json'.format(dow=dow)))
+    shutil.copy(os.path.join(autotune_directory, 'profile.pump.json'),
+                os.path.join(autotune_directory, 'profile.pump.{dow}.json'.format(dow=dow)))
 
 def export_to_excel(output_directory, output_excel_filename):
     autotune_export_to_xlsx = 'oref0-autotune-export-to-xlsx --dir {0} --output {1}'.format(output_directory, output_excel_filename)
@@ -316,9 +323,9 @@ if __name__ == "__main__":
     for dow in passed_date_dictionary.keys():
         get_openaps_daily_profile(DIR, dow)
         date_list = passed_date_dictionary[dow]
-        for this_date in date_list:
-            get_nightscout_carb_and_insulin_treatments(NIGHTSCOUT_HOST, DIR, dow, this_date, USER_TOKEN)
-            get_nightscout_bg_entries(NIGHTSCOUT_HOST, DIR, dow, this_date, USER_TOKEN)
+        for run_date in date_list:
+            get_nightscout_carb_and_insulin_treatments(NIGHTSCOUT_HOST, DIR, dow, run_date, USER_TOKEN)
+            get_nightscout_bg_entries(NIGHTSCOUT_HOST, DIR, dow, run_date, USER_TOKEN)
 #                get_openaps_profile(DIR)
             run_autotune(dow, NUMBER_OF_RUNS, DIR)
     
