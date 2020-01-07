@@ -25,3 +25,7 @@ bin/__pycache__
 package-lock.json
 
 *.pyc
+
+.vscode
+.gitignore
+..gitignore.un\~
